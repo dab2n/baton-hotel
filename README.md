@@ -27,7 +27,7 @@
 |---|---|---|---|
 | 1 | idle | 검정 + 중앙 구슬 | 얼굴 근접 |
 | 2 | fill | 문구 없음 | 엄지척 |
-| 3 | connect | 병원 로봇과 같은 별 모션 → 가장자리 스트로크 → `Long day, huh?` / `Shall I run a shower?` | 탭 |
+| 3 | connect | 병원 로봇과 같은 별 모션 → 가장자리 스트로크 → `It’s been a long day.` / `Shall I run a shower?` | 탭 |
 | 4 | full | `Welcome, Leo.` | 4.3s |
 | 5 | full | `Your reservation` · Deluxe King · 2 nights | 5.6s |
 | 6 | full | `Checking you in…` | 3.8s |
