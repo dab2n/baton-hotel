@@ -697,10 +697,12 @@ else try {
 <script type="module">
 /* ---------- 소리 인터랙션 (호텔만) ----------
    장면 0 에서 큰 소리(말을 걸면) → 원이 가운데로 모여 또렷해진다 = 집중해서 듣고 있다.
-   마지막 큰 소리 뒤 3초가 지나면 다시 배회. 마이크가 없으면 L 키로 흉내낸다. */
+   마지막 큰 소리 뒤 3초가 지나면 다시 배회. 마이크가 없으면 L 키로 흉내낸다.
+   AudioContext 는 화면을 한 번 눌러야 켜지는데 첫 화면에서 누르면 다음 장면으로 넘어가 버린다 → 트랙에서 샘플을 직접 읽는다. */
 
-// ponytail: 마이크·공간 소음마다 다르므로 실기기에서 LOUD 만 보정한다 (카메라 창에 현재 dB 가 뜬다)
-const LOUD = -30;   // dBFS. 조용한 방 -60 안팎, 1m 앞에서 말하면 -35 ~ -20
+// ponytail: 마이크·공간마다 다르므로 실기기에서 LOUD 만 보정한다 (카메라 창에 최근 최대 dB 가 뜬다)
+// 박수는 짧고 뾰족해서 평균(RMS)이 아니라 순간 최댓값(peak)으로 잰다. 보통 대화 -35 ~ -20, 박수는 순간값이 훨씬 높다
+const LOUD = -18;   // peak dBFS. 1~2m 박수 -18 ~ -6
 const HOLD = 3000;  // 듣는 모양을 유지하는 시간(ms)
 window.__LOUD = LOUD;
 
@@ -715,24 +717,47 @@ const listen = () => {
 window.__listen = listen;
 addEventListener('keydown', e => { if (e.key === 'l' || e.key === 'L') listen(); });
 
+// 한 묶음의 소리에서 가장 큰 순간값 → 기준을 넘으면 듣기. 화면 표시는 1초 동안 최댓값을 잡아 둔다
+let shown = -99, shownAt = 0;
+const hear = buf => {
+  let p = 0;
+  for (const v of buf) if (Math.abs(v) > p) p = Math.abs(v);
+  const db = 20 * Math.log10(p + 1e-9);
+  const t = performance.now();
+  if (db > shown || t - shownAt > 1000) { shown = db; shownAt = t; }
+  window.__db = shown;
+  if (db > LOUD) listen();
+};
+
 if (!new URLSearchParams(location.search).has('s')) try {
   // 자동 음량 보정을 켜 두면 작은 소리도 크게 들려 '큰 소리' 를 가를 수 없다
   const mic = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-  const ac = new AudioContext();
-  const an = ac.createAnalyser();
-  an.fftSize = 1024;
-  ac.createMediaStreamSource(mic).connect(an);
-  ac.resume();
-  addEventListener('pointerdown', () => ac.resume());
-  const buf = new Float32Array(an.fftSize);
-  setInterval(() => {
-    an.getFloatTimeDomainData(buf);
-    let sum = 0;
-    for (const v of buf) sum += v * v;
-    window.__db = 10 * Math.log10(sum / buf.length + 1e-12);
-    if (window.__db > LOUD) listen();
-  }, 50);
+  const track = mic.getAudioTracks()[0];
+  if ('MediaStreamTrackProcessor' in window) {
+    // 모든 샘플을 빠짐없이 받는다. AudioContext 와 달리 화면을 한 번 눌러야 켜지는 제약이 없다
+    // (첫 화면에서 누르면 다음 장면으로 넘어가 버리므로 그 제약이 치명적이다)
+    const reader = new MediaStreamTrackProcessor({ track }).readable.getReader();
+    let buf = new Float32Array(0);
+    for (;;) {
+      const { value: frame, done } = await reader.read();
+      if (done) break;
+      const n = frame.numberOfFrames;
+      if (buf.length < n) buf = new Float32Array(n);
+      frame.copyTo(buf.subarray(0, n), { planeIndex: 0, format: 'f32-planar' });
+      frame.close();
+      hear(buf.subarray(0, n));
+    }
+  } else {
+    const ac = new AudioContext();
+    const an = ac.createAnalyser();
+    an.fftSize = 2048;
+    ac.createMediaStreamSource(mic).connect(an);
+    ac.resume();
+    addEventListener('pointerdown', () => ac.resume());
+    const buf = new Float32Array(an.fftSize);
+    setInterval(() => { an.getFloatTimeDomainData(buf); hear(buf); }, 20);
+  }
 } catch (e) {
   console.warn('[mic]', e);
 }
