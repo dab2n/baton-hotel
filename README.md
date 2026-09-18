@@ -27,7 +27,8 @@
 |---|---|---|---|
 | 1 | idle | 검정 + 중앙 구슬 | 얼굴 근접 |
 | 2 | fill | 문구 없음 | 엄지척 |
-| 3 | connect | 병원 로봇과 같은 별 모션 → 가장자리 스트로크 → `It’s been a long day.` / `Shall I run a shower?` | 탭 |
+| 3 | connect | 병원 로봇과 같은 별 모션 → 끝난 검정 위에 `Nav 001` / `ptn 001` (숫자는 5x7 도트, 스트로크 톤) → 완전히 사라짐 | 6.6s + .9s |
+| 4 | full | 스트로크(R 410)가 켜진 뒤 `It’s been a long day.` / `Shall I run a shower?` | 탭 |
 | 4 | full | `Welcome, Leo.` | 4.3s |
 | 5 | full | `Your reservation` · Deluxe King · 2 nights | 5.6s |
 | 6 | full | `Checking you in…` | 3.8s |
