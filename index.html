@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hotel Robot · Circular Screen</title>
+<style>
+/* 좌표계 : 피그마 1080 단위를 그대로 CSS px 로 쓰고 마지막에 통째로 scale()
+   병원 로봇(dab2n/baton)과 같은 디자인 시스템. 스크린/베젤/하우징/배경 레이어는 동일하고
+   장면(문구)만 호텔 시나리오로 갈아끼운다.
+
+   그래픽 상태는 4가지뿐 : idle → fill → search → full
+     idle   중앙의 작은 구슬 (얼굴 대기)
+     fill   구슬이 화면을 채움 (엄지척 대기)
+     search 구슬은 물러나고 베젤 안쪽이 일렁인다 (링 컨텍스트 수신)
+     full   화면을 채운 그라디언트 위에 문구
+   장면 목록은 아래 SCENES 배열 하나로만 관리한다.
+*/
+
+:root{ --fit: 1238; }          /* 미리보기 : 하우징 자리를 늘 비워둔다 */
+body.kiosk{ --fit: 1080; }     /* #screen : 실기기 */
+
+*{ box-sizing: border-box; }
+/* 스크린 밖 여백 : 채도 낮은 검정에 가까운 남색 (병원 로봇과 동일) */
+html,body{ height:100%; margin:0; overflow:hidden; background:#0B0F18; }
+html:has(.shot), html:has(.shot) body{ background:transparent; }   /* ?s=N : 배경색 없이 UI 만 */
+body{
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--ff-en,'Delight'), 'Pretendard Web', system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none;
+}
+/* 자간 3% : letter-spacing 은 계산된 px 로 상속돼서 요소마다 em 을 다시 풀어준다 */
+.device, .device *{ letter-spacing:0.03em; }
+
+/* 폰트 대체 : Delight 가 없는 컴퓨터(배포 링크)에선 Pretendard 로. 자간은 굵기·크기별 실측 보정 */
+@font-face{ font-family:'Pretendard Web'; font-weight:400; font-display:swap;
+  src:local('Pretendard Regular'), local('Pretendard-Regular'), url('pretendard/Pretendard-Regular.subset.woff2') format('woff2'); }
+@font-face{ font-family:'Pretendard Web'; font-weight:500; font-display:swap;
+  src:local('Pretendard Medium'), local('Pretendard-Medium'), url('pretendard/Pretendard-Medium.subset.woff2') format('woff2'); }
+@font-face{ font-family:'Pretendard Web'; font-weight:600; font-display:swap;
+  src:local('Pretendard SemiBold'), local('Pretendard-SemiBold'), url('pretendard/Pretendard-SemiBold.subset.woff2') format('woff2'); }
+@font-face{ font-family:'Pretendard Web'; font-weight:700; font-display:swap;
+  src:local('Pretendard Bold'), local('Pretendard-Bold'), url('pretendard/Pretendard-Bold.subset.woff2') format('woff2'); }
+html.fb-en{ --ff-en:'Pretendard Web'; }
+html.fb-en .headline, html.fb-en .headline *{ letter-spacing:0.0256em; }   /* 500 76 */
+html.fb-en .headline em, html.fb-en .headline em *{ letter-spacing:0.0366em; }
+html.fb-en .meta, html.fb-en .meta *{ letter-spacing:0.0165em; }           /* 400 52 */
+
+.device{ position:relative; width:1080px; height:1080px; flex:none; transform:scale(var(--s,1)); }
+
+/* ---------- 제품 하우징 ---------- */
+.ring{
+  position:absolute; inset:-78.8px; border-radius:50%;
+  background:#f3e682;
+  box-shadow:0 24px 70px rgba(0,0,0,.16);
+}
+.ring::before{
+  content:''; position:absolute; inset:23.2px; border-radius:50%;
+  background:radial-gradient(circle closest-side,#cdc47e 90.4%,#fff8c1 100%);
+}
+body.bare .ring{ display:none; }
+
+/* ---------- 목업 토글 ---------- */
+.toggle{
+  position:fixed; right:16px; top:50%; translate:0 -50%; z-index:10;
+  display:flex; align-items:center; gap:9px;
+  padding:9px 14px 9px 10px; border:1px solid rgba(0,0,0,.14); border-radius:999px;
+  background:#fff; color:#000; cursor:pointer;
+  font:inherit; font-size:12px; font-weight:500; line-height:1;
+  box-shadow:0 2px 12px rgba(0,0,0,.14);
+}
+.toggle:hover{ background:#f2f2f2; }
+.toggle .sw{ width:34px; height:20px; border-radius:999px; flex:none;
+             background:#000; transition:background-color .2s; }
+.toggle .sw::after{ content:''; display:block; width:16px; height:16px; margin:2px;
+                    border-radius:50%; background:#fff;
+                    transform:translateX(14px); transition:transform .2s; }
+body.bare .toggle .sw{ background:#d6d6d6; }
+body.bare .toggle .sw::after{ transform:none; }
+body.kiosk .toggle{ display:none; }
+
+/* 카메라 모니터 (테스트용) */
+.cam{ position:fixed; right:16px; bottom:16px; z-index:10; width:240px; }
+.camview{ display:grid; aspect-ratio:4/3; border-radius:10px; overflow:hidden;
+          background:#111; box-shadow:0 2px 12px rgba(0,0,0,.18); }
+.camview > *{ grid-area:1/1; width:100%; height:100%; transform:scaleX(-1); }
+.camview video{ object-fit:cover; }
+.camstat{ margin-top:6px; font-size:11px; line-height:1.5; color:#888;
+          text-align:right; white-space:pre-line; }
+body.kiosk .cam{ display:none; }
+
+/* ---------- 스크린 1080x1080 ---------- */
+.screen{
+  position:absolute; inset:0; border-radius:50%;
+  background:#000;
+  overflow:hidden;
+  clip-path:circle(520px at 540px 540px);
+}
+/* 위아래 색 띠 (피그마 3124:17775 의 감청 / 밝은 회색) :
+   직선 그라디언트는 검은 화면에서 경계가 가로줄로 보인다 → 스크린과 같은 중심(540,540)의 동심원으로 번지게 하고
+   위/아래 방향은 아주 긴 마스크로만 나눈다. 등색선이 테두리와 같은 곡률(가운데가 높고 옆이 낮다)로 휜다 */
+.screen::before, .screen::after{ content:''; position:absolute; inset:0; pointer-events:none;
+  transition:opacity 1.4s ease; }   /* idle → fill 로 넘어갈 때 뚝 켜지지 않고 스며 나온다 */
+.screen::before{   /* 위 : 감청 */
+  background:radial-gradient(circle 530px at 540px 540px, rgba(22,33,58,0) 68%, rgba(20,29,50,.4) 86%, #16213A 97%, #16213A 100%);
+  -webkit-mask:linear-gradient(180deg,#000 0 7%, rgba(0,0,0,.7) 18%, transparent 32%);
+          mask:linear-gradient(180deg,#000 0 7%, rgba(0,0,0,.7) 18%, transparent 32%); }
+.screen::after{    /* 아래 : 밝은 회색 */
+  background:radial-gradient(circle 530px at 540px 540px, rgba(43,49,60,0) 70%, rgba(39,45,55,.4) 87%, #2B313C 97%, #2B313C 100%);
+  -webkit-mask:linear-gradient(0deg,#000 0 6%, rgba(0,0,0,.72) 17%, transparent 30%);
+          mask:linear-gradient(0deg,#000 0 6%, rgba(0,0,0,.72) 17%, transparent 30%); }
+/* 기본 화면(얼굴 인식 전)은 위아래 아무것도 없이 순검정. 띠는 구슬이 커질 때부터 */
+body.idle .screen::before, body.idle .screen::after, body.idle .rimlight{ opacity:0; }
+/* 그 색이 가장자리를 따라 아주 천천히 돈다 : 원뿔 그라디언트를 테두리 쪽만 남기고 회전 */
+.rimlight{ position:absolute; inset:-8%; pointer-events:none;
+  background:conic-gradient(from 0deg,
+    rgba(30,44,76,0)    0deg, rgba(36,52,90,.5)   55deg, rgba(22,29,48,0)  135deg,
+    rgba(62,69,83,0)  205deg, rgba(62,69,83,.4)  275deg, rgba(30,44,76,0)  360deg);
+  -webkit-mask:radial-gradient(circle closest-side, transparent 70%, #000 92%);
+          mask:radial-gradient(circle closest-side, transparent 70%, #000 92%);
+  opacity:.55; transition:opacity 1.4s ease; animation:rimOrbit 18s linear infinite; }
+@keyframes rimOrbit{ to{ rotate:360deg; } }
+body.fill .screen::before, body.fill .screen::after{ opacity:.85; }
+body.fill .rimlight{ opacity:.35; }
+.bezel{ position:absolute; inset:0; width:1080px; height:1080px;
+        z-index:4; pointer-events:none; }
+
+/* ---------- 배경 레이어 ---------- */
+.blur39{ position:absolute; inset:0; filter:blur(39px); transition:filter .8s ease; }
+.field{ position:absolute; left:28px; top:-132px; width:1022px; height:1053px;
+        border-radius:50%; background:linear-gradient(180deg,#fff 23.89%,#f6e280 100%); }
+.sheen{ position:absolute; left:413px; top:-72px; width:424px; height:420px;
+        border-radius:50%; background:#def2ff; opacity:.82; filter:blur(100px); }
+.core { position:absolute; left:330px; top:454px; width:332px; height:328px;
+        border-radius:50%; background:#fdffde; filter:blur(100px); }
+.cyan { position:absolute; left:31px; top:-186px; width:1116px; height:828px;
+        opacity:.27; filter:blur(100px); }
+
+.field,.sheen,.core,.cyan{
+  transform-origin:50% 50%;
+  transition:transform 1.8s cubic-bezier(.45,0,.15,1), opacity 1.2s ease,
+             translate 1.2s ease, scale 1.2s ease, rotate 1.2s ease,
+             border-radius 1.2s ease;
+}
+
+body.idle   .field{ transform:translate(1px,145.5px) scale(.22); }
+/* 엄지척 대기 : 구슬이 화면을 채우지만 아주 옅게 + 색을 빼 화면은 어둡게 유지 */
+body.fill   .field{ transform:translate(1px,145.5px) scale(1.2); opacity:.03; filter:grayscale(1); }
+body.search .field{ transform:translate(1px,145.5px) scale(.58); opacity:.06; filter:grayscale(1); }
+body.full   .field{ transform:translate(1px,145.5px) scale(1.2); opacity:0; }
+/* 색 블롭은 idle 에서만 : 검은 화면에선 파랗고 누렇게 비친다 */
+body:not(.idle) .sheen, body:not(.idle) .core, body:not(.idle) .cyan{ opacity:0; }
+
+body.idle .sheen{ opacity:0; }
+body.idle .core, body.fill .core{ transform:scale(.4); opacity:0; }
+body.search .core{ transform:translate(9px,-29px); }
+body.idle .cyan, body.fill .cyan, body.search .cyan{
+  transform:translate(9px,172.5px) scale(.469); opacity:.09;
+}
+
+/* 살아있는 구슬 : idle 에서만 배회하고, 채워진 뒤에는 고정 */
+body.idle .field{
+  animation:wander 30s linear      infinite,
+            ripple  6s ease-in-out infinite,
+            sway    7s ease-in-out infinite alternate;
+}
+/* 발광 링 : 구슬 바깥 테두리만 밝게. 안쪽 그라디언트는 원래대로 둔다 */
+.field::before{
+  content:''; position:absolute; inset:-9%; border-radius:inherit;
+  opacity:0; transition:opacity .8s ease;
+  background:conic-gradient(from 0deg,
+    rgba(255,250,214,1) 0deg, rgba(255,246,196,.3) 100deg,
+    rgba(255,246,196,.1) 190deg, rgba(255,248,204,.45) 280deg, rgba(255,250,214,1) 360deg);
+  -webkit-mask:radial-gradient(circle closest-side, transparent 68%, #000 88%, #000 100%);
+          mask:radial-gradient(circle closest-side, transparent 68%, #000 88%, #000 100%);
+}
+body.idle .field::before{ opacity:1; animation:gleam 9s ease-in-out infinite; }
+@keyframes gleam{
+   0%  { rotate:  0deg; opacity:.5;  }
+  22%  { rotate:132deg; opacity:1;   }
+  38%  { rotate: 98deg; opacity:.62; }
+  62%  { rotate:254deg; opacity:1;   }
+  80%  { rotate:222deg; opacity:.55; }
+ 100%  { rotate:360deg; opacity:.5;  }
+}
+body.idle .blur39{ filter:blur(17px); }
+/* 정적 장면에서 .field 를 움직이면 검정이 드러난다. 고정하고 위의 블롭만 흘린다 */
+body:not(.idle) .field{ animation:none; translate:0 0; scale:1; rotate:0deg; border-radius:50%; }
+.sheen{ animation:drift2  9s ease-in-out infinite alternate; }
+.core { animation:drift4 11s ease-in-out infinite alternate; }
+.cyan { animation:drift3 13s ease-in-out infinite alternate; }
+@keyframes wander{
+   0%  { translate:  0px   0px; scale:1    1;    animation-timing-function:cubic-bezier(.28,.86,.3,1); }
+   7%  { translate:-46px -30px; scale:1.09 .93;  animation-timing-function:cubic-bezier(.5,0,.5,1);    }
+  25%  { translate:-38px -22px; scale:1.01 1;    animation-timing-function:cubic-bezier(.28,.86,.3,1); }
+  32%  { translate: 30px -54px; scale:.92  1.11; animation-timing-function:cubic-bezier(.5,0,.5,1);    }
+  48%  { translate: 24px -44px; scale:1    1;    animation-timing-function:cubic-bezier(.28,.86,.3,1); }
+  54%  { translate: 56px  18px; scale:1.08 .94;  animation-timing-function:cubic-bezier(.5,0,.5,1);    }
+  70%  { translate: 48px  14px; scale:1    1.01; animation-timing-function:cubic-bezier(.28,.86,.3,1); }
+  77%  { translate:-28px  48px; scale:.94  1.08; animation-timing-function:cubic-bezier(.5,0,.5,1);    }
+  93%  { translate:-22px  40px; scale:1    1;    animation-timing-function:cubic-bezier(.28,.86,.3,1); }
+ 100%  { translate:  0px   0px; scale:1    1;    }
+}
+@keyframes sway{ from{ rotate:-30deg; } to{ rotate:30deg; } }
+@keyframes ripple{
+   0%,100%{ border-radius:50% 50% 50% 50% / 50% 50% 50% 50%; }
+  20%     { border-radius:63% 37% 44% 56% / 41% 59% 41% 59%; }
+  40%     { border-radius:39% 61% 59% 41% / 59% 37% 63% 41%; }
+  60%     { border-radius:57% 43% 37% 63% / 44% 63% 37% 56%; }
+  80%     { border-radius:42% 58% 62% 38% / 61% 42% 58% 39%; }
+}
+@keyframes drift2{ to{ translate:-252px 344px; scale:1.72; } }
+@keyframes drift3{ to{ translate:206px 322px; rotate:18deg; scale:1.28; } }
+@keyframes drift4{ to{ translate:-134px 168px; scale:1.62; } }
+
+/* ---------- search : 베젤 바로 안쪽이 숨쉬듯 일렁인다 ---------- */
+.rim{
+  position:absolute; inset:0; border-radius:50%; z-index:1; pointer-events:none;
+  opacity:0; transition:opacity 1s ease;
+  box-shadow:inset 0 0 52px 8px rgba(254,255,249,.28);
+}
+/* full 로 넘어가도 애니메이션은 계속 돌린다 (끊긴 느낌 방지). 사라지는 건 opacity 만 */
+body.search .rim,
+body.full   .rim{ animation:breathe 3.4s ease-in-out infinite; }
+body.search .rim{ opacity:1; }
+@keyframes breathe{
+  0%,100%{ box-shadow:inset 0 0 44px  4px rgba(254,255,249,.2); }
+  50%    { box-shadow:inset 0 0 104px 30px rgba(254,255,249,.45); }
+}
+.rim::after{
+  content:''; position:absolute; inset:0; border-radius:inherit; opacity:0;
+  background:radial-gradient(circle at 50% 3%, rgba(254,255,249,.3), transparent 44%);
+  filter:blur(44px); transition:opacity 1s ease;
+}
+body.search .rim::after,
+body.full   .rim::after{ animation:orbit 11s linear infinite; }
+body.search .rim::after{ opacity:1; }
+@keyframes orbit{ to{ rotate:360deg; } }
+
+/* ---------- 본문 : 한 장면 = 카운터 + 문장 + 부가정보 ---------- */
+/* flex 로 세로 중앙 정렬 — 줄 수·구성이 달라도 항상 스크린 정중앙 */
+.stage{
+  /* .rim(z1) 보다 뒤 DOM 이라 z-index 없이도 위에 온다 */
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:34px; padding:0 130px; pointer-events:none;
+}
+.stage > *{ margin:0; text-align:center; color:#fff; }
+
+/* 숫자 : 병원 로봇 길안내와 같은 5x7 도트 (폰트 대신 직접 그린다).
+   숫자가 바뀔 때는 자리를 옮기지 않고 칸마다 불이 꺼지고 켜지며 한 칸씩 올라간다 */
+.count{ line-height:0; }
+.countdots{ display:block; overflow:visible; animation:countIn .5s ease both; }
+.countdots circle{ fill:#fff; opacity:0; transition:opacity .18s ease; }
+.countdots circle.on{ opacity:1; }
+.countdots .dim circle.on{ opacity:.42; }   /* "/10" 쪽 */
+@keyframes countIn{ from{ opacity:0; } to{ opacity:1; } }
+.headline{ font-size:76px; font-weight:500; line-height:1.45; }
+.meta    { font-size:52px; font-weight:400; line-height:1.5; }
+/* 글자는 흰색이 줄 박스 66% 까지 가득하고 아래 끝에서만 살짝 옅어진다. 강조어는 흰색 그대로 + 글리밍.
+   색은 글자(.c)마다 입힌다 : 단어(.w)에 입히면 background-clip:text 가 아직 안 켜진 글자까지 그려 단어가 통째로 먼저 보인다 */
+.stage .c{ background:linear-gradient(180deg,#fff 0 66%,rgba(255,255,255,.55) 100%);
+           -webkit-background-clip:text; background-clip:text; color:transparent; }
+.stage em{ font-style:normal; font-weight:600; display:inline-block; }
+.stage em .c{ background:none; color:#fff; }
+/* 글리밍 : 같은 글자를 #FEFFF9 로 한 겹 더 얹고 오른쪽으로 갈수록 흐리게. 글자와 같은 시각에 함께 떠오른다
+   blur 를 em 단위로 : 호텔도 헬스장과 같이 글자가 76px 이라 px 로 고정하면 번짐이 너무 작다 */
+.glim{ position:relative; }
+.glim::before, .glim::after{ content:attr(data-t); position:absolute; left:0; top:0;
+  color:#FEFFF9; white-space:nowrap; pointer-events:none; text-align:left; opacity:0;
+  animation:glimWipe calc(var(--tn) * 1ms + 500ms) cubic-bezier(.3,.5,.4,1) both;
+  animation-delay:calc(var(--t0) * 1ms); }   /* 강조어의 첫 글자가 켜질 때 시작해 마지막 글자까지 훑는다 */
+/* 마스크 두 겹 : 오른쪽으로 갈수록 짙어지는 번짐 + 왼→오로 열리는 와이프 (교집합).
+   글자가 왼쪽부터 나타나는 것과 같은 방향·같은 시각에 번짐이 따라온다 */
+.glim::before, .glim::after{
+  -webkit-mask-repeat:no-repeat;   mask-repeat:no-repeat;
+  -webkit-mask-position:0 0, 0 0;  mask-position:0 0, 0 0;
+  -webkit-mask-size:100% 100%, 140% 100%;  mask-size:100% 100%, 140% 100%;
+  -webkit-mask-composite:source-in;        mask-composite:intersect; }
+.glim::before{ filter:blur(.025em);
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 22%), linear-gradient(90deg,#000 0 68%, transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 0%,#000 22%), linear-gradient(90deg,#000 0 68%, transparent 100%); }
+.glim::after { filter:blur(.05em);
+  -webkit-mask-image:linear-gradient(90deg,transparent 5%,#000 45%), linear-gradient(90deg,#000 0 68%, transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 5%,#000 45%), linear-gradient(90deg,#000 0 68%, transparent 100%); }
+@keyframes glimWipe{
+  from{ opacity:0; -webkit-mask-size:100% 100%, 0% 100%;   mask-size:100% 100%, 0% 100%;   }
+  12% { opacity:1; }
+  to  { opacity:1; -webkit-mask-size:100% 100%, 140% 100%; mask-size:100% 100%, 140% 100%; }
+}
+
+.w{ display:inline-block; }   /* 단어는 줄바꿈 묶음만. 보이기·애니메이션은 글자(.c)에서 */
+
+/* ---------- 문장 등장 (병원 로봇과 같은 규칙) ----------
+   문장 단위로 왼쪽부터 한 글자씩 흘러나오고, 가장 최근에 나타난 글자에 유리·비눗방울 같은 색 번짐.
+   색은 엄지척 구에서 : 흰 핵 · 연두 · 파랑 · 하늘 (글자마다 두 색 짝 --g1/--g2). 일반 글자는 옅게, 강조어는 짙게.
+   강조어는 켜진 뒤에도 번짐이 글자를 따라 물결처럼 일렁인다. 번짐·흐림 크기는 em 단위 (글자가 52~240px 로 제각각) */
+@keyframes letterIn{
+  0%   { opacity:0; filter:blur(.05em) drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  38%  { opacity:1; filter:blur(0)     drop-shadow(0 0 .09em var(--g1)) drop-shadow(0 0 .22em var(--g2)); }
+  100% { opacity:1; filter:blur(0)     drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+}
+@keyframes emGlow{
+  from{ filter:blur(0) drop-shadow(0 0 .012em var(--g1)) drop-shadow(0 0 .03em var(--g2)); }
+  to  { filter:blur(0) drop-shadow(0 0 .04em var(--g1))  drop-shadow(0 0 .1em var(--g2)); }   /* 가장자리만 얇게 일렁인다 */
+}
+.stage .c{ animation:letterIn .95s cubic-bezier(.25,.6,.3,1) both; animation-delay:calc(var(--t) * 1ms); }
+.stage em .c{ animation:letterIn .95s cubic-bezier(.25,.6,.3,1) both, emGlow 2.4s ease-in-out infinite alternate;
+  animation-delay:calc(var(--t) * 1ms), calc(var(--ei) * 90ms + var(--t0) * 1ms + .95s); }
+
+@media (prefers-reduced-motion:reduce){
+  .w, .c{ animation:none; opacity:1; filter:none; }
+  .field,.sheen,.core,.cyan,.rim,.rim::after{ animation:none; }
+}
+</style>
+</head>
+<body class="idle bare">
+
+<button class="toggle" type="button" aria-pressed="true">
+  <span class="sw"></span><span class="lb">제품 목업</span>
+</button>
+
+<div class="cam">
+  <div class="camview">
+    <video id="camv" playsinline muted></video>
+    <canvas id="camc" width="320" height="240"></canvas>
+  </div>
+  <div class="camstat">카메라 준비 중…</div>
+</div>
+
+<div class="device">
+  <div class="ring"></div>
+
+  <div class="screen">
+    <div class="rimlight" aria-hidden="true"></div>
+    <div class="blur39"><div class="field"></div></div>
+    <div class="sheen"></div>
+    <div class="core"></div>
+    <svg class="cyan" viewBox="0 0 1116 828" aria-hidden="true">
+      <path fill="#8AFFF3" d="M916 401.141C916 493.216 717.924 628 569.426 628C420.927 628 200 353.907 200 261.832C200 169.756 393.505 207.78 542.004 207.78C690.503 207.78 916 309.065 916 401.141Z"/>
+    </svg>
+    <div class="rim"></div>
+
+    <div class="stage"></div>
+
+    <!-- 카메라 노치 : .screen 안에 두어 같은 clip-path 로 잘리게 한다. 베젤은 그리지 않는다 -->
+    <svg class="bezel" viewBox="0 0 1080 1080" aria-hidden="true">
+      <ellipse cx="540" cy="-10" rx="86" ry="88" fill="#000"/>
+    </svg>
+
+  </div>
+
+</div>
+
+<script>
+if (location.hash === '#screen') document.body.classList.add('bare','kiosk');
+
+// scale() 은 단위 없는 수만 받으므로 JS로 계산
+const FILL = .92;
+const fit = () => document.documentElement.style.setProperty('--s',
+  Math.min(innerWidth, innerHeight) * (document.body.classList.contains('kiosk') ? 1 : FILL) /
+  parseFloat(getComputedStyle(document.body).getPropertyValue('--fit')));
+addEventListener('resize', fit);
+fit();
+
+/* ---------- 장면 목록 (임시 : 문구 조정 중, 헬스장 흐름을 호텔 체크인으로 옮김) ----------
+   look  : idle | fill | search | full
+   hold  : 다음 장면까지 머무는 ms. 0 이면 카메라/탭 입력을 기다린다
+   delay : 첫 단어가 올라오기까지의 대기(ms). 그래픽이 자리잡은 뒤에 글이 오게
+   hold1 : 한 호흡으로 읽히는 짧은 문장 — 문장부호에서 쉬지 않는다             */
+const SCENES = [
+  { look:'idle',   hold:0 },                                                   // 얼굴 대기
+  { look:'fill',   hold:0, delay:1750,                             // 01a 엄지척 대기
+    text:'Hello, may I help you check in?' },
+  { look:'search', hold:4200 },                                                // 01a 예약 조회
+  { look:'full',   hold:4300, delay:1500, hold1:true,               // 01b
+    text:'Welcome, <em>Leo.</em>' },
+  { look:'full',   hold:5600, // 01c
+    text:'Your reservation', meta:'Deluxe King · 2 nights<br>Check-out Sep 20' },
+  { look:'full',   hold:3800, hold1:true, text:'Checking you in…' },   // 02a
+  { look:'full',   hold:5600, hold1:true,                           // 02b
+    text:'Your room is <em>ready.</em>', meta:'Room 1207 · 12F' },
+  { look:'full',   hold:4600, hold1:true,                           // 03a
+    text:'Follow me.', meta:'To the elevator' },
+  { look:'full',   hold:4000, count:'3<u>/12</u>',  text:'Going up.' },          // 03b
+  { look:'full',   hold:4000, count:'7<u>/12</u>',  text:'Almost there.' },      // 03c
+  { look:'full',   hold:4600, count:'12<u>/12</u>',                              // 03d
+    text:'12th floor.', meta:'This way, please.' },
+  { look:'full',   hold:5000, hold1:true,                                        // 04a
+    text:'Here is your room.', meta:'<em>1207</em>' },
+  { look:'full',   hold:5600, // 04b
+    text:'Good to know', meta:'Breakfast 7–10 AM · 2F<br>Wi-Fi in your room card' },
+  { look:'full',   hold:0, hold1:true, text:'Enjoy your stay, <em>Leo.</em>' },  // 04c
+];
+
+const stage = document.querySelector('.stage');
+
+// 텍스트를 단어(.w) 단위로 감싼다 : 줄바꿈이 단어 가운데서 일어나지 않게 하는 묶음
+const split = el => {
+  const walk = node => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        for (const part of child.data.split(/(\s+)/)) {
+          if (!part) continue;
+          if (/^\s+$/.test(part)) { frag.append(part); continue; }
+          const s = document.createElement('span');
+          s.className = 'w'; s.textContent = part;
+          frag.append(s);
+        }
+        child.replaceWith(frag);
+      } else if (child.tagName !== 'BR') { walk(child); }
+    }
+  };
+  walk(el);
+};
+
+// 문장 단위로 한 글자씩 (병원 로봇과 같은 규칙) : 단어 안 글자를 인라인 .c 로 쪼개 글자마다 시작 시각 --t(ms).
+//  · 한 줄 안에서는 글자(띄어쓰기 한 칸 포함)가 30ms 간격으로 끊김 없이 흘러나온다 (등장 0.95s 라 겹쳐 번진다)
+//  · 문장 끝(.?!…) 뒤 +450ms. 한 호흡 문장(hold1)은 쉬지 않는다
+//  · 일반 글자 번짐은 옅은 색, 강조어(em)는 짙은 색. 강조어에는 첫 글자 시각 --t0, 길이 --tn, 강조어 안 순서 --ei
+//  · inline span 이라 커닝이 끊기지 않는다
+const GLOW_EM   = [['rgba(245,252,131,.95)', 'rgba(113,172,251,.8)'],    // 연두 · 파랑
+                   ['rgba(138,255,243,.95)', 'rgba(176,150,255,.7)'],    // 하늘 · 라벤더
+                   ['rgba(255,250,222,.95)', 'rgba(113,220,251,.75)']];  // 흰 핵 · 하늘
+const GLOW_SOFT = GLOW_EM.map(pair => pair.map(c => c.replace(/[\d.]+\)$/, a => (parseFloat(a) * .35).toFixed(2) + ')')));
+// 숫자 : 5x7 도트 (병원 로봇 길안내와 같은 글리프). 칸마다 원을 미리 깔고 켜진 칸만 불을 켠다
+const GLYPH = {
+  0: '01110,10001,10011,10101,11001,10001,01110', 1: '00100,01100,00100,00100,00100,00100,01110',
+  2: '01110,10001,00001,00010,00100,01000,11111', 3: '11111,00010,00100,00010,00001,10001,01110',
+  4: '00010,00110,01010,10010,11111,00010,00010', 5: '11111,10000,11110,00001,00001,10001,01110',
+  6: '00110,01000,10000,11110,10001,10001,01110', 7: '11111,00001,00010,00100,01000,01000,01000',
+  8: '01110,10001,10001,01110,10001,10001,01110', 9: '01110,10001,10001,01111,00001,00010,01100',
+  '/': '00001,00010,00010,00100,01000,01000,10000', ' ': '00000,00000,00000,00000,00000,00000,00000',
+};
+const NS = 'http://www.w3.org/2000/svg';
+const DP = 25, DR = 9.5, DADV = 6 * DP;   // 칸 간격 · 도트 반지름 · 글자 한 칸(5칸 + 여백 1칸). 높이 약 170px
+let lastCount = 0, countRoll, countWait;
+const glyphInto = (g, ch) => {
+  const bits = GLYPH[ch].replaceAll(',', '');
+  [...g.children].forEach((d, n) => d.classList.toggle('on', bits[n] === '1'));
+};
+// 도트 카운트를 그리고 이전 숫자에서 목표 숫자까지 한 칸씩 올린다. 끝나는 시각(ms)을 돌려준다
+const drawCount = (el, to, total, start) => {
+  const slots = String(total).length;   // 총 횟수 자릿수만큼 자리를 미리 잡는다 : 3/10 · 10/10 모두 "/" 가 같은 자리에 있어 세트 내내 숫자가 옮겨 다니지 않는다
+  const chars = slots + 1 + String(total).length;
+  const w = (chars - 1) * DADV + 4 * DP + 2 * DR, h = 6 * DP + 2 * DR;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'countdots');
+  svg.setAttribute('width', w); svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `${-DR} ${-DR} ${w} ${h}`);
+  svg.style.animationDelay = start + 'ms';
+  const groups = [...Array(chars)].map((_, i) => {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('transform', `translate(${i * DADV},0)`);
+    if (i >= slots) g.setAttribute('class', 'dim');
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) {
+      const d = document.createElementNS(NS, 'circle');
+      d.setAttribute('cx', c * DP); d.setAttribute('cy', r * DP); d.setAttribute('r', DR);
+      g.append(d);
+    }
+    svg.append(g);
+    return g;
+  });
+  const show = v => [...String(v).padStart(slots, ' ')].forEach((ch, i) => glyphInto(groups[i], ch));
+  [...('/' + total)].forEach((ch, i) => glyphInto(groups[slots + i], ch));
+  el.append(svg);
+  let v = Math.min(lastCount, to);
+  const steps = to - v;
+  show(v);
+  lastCount = to;
+  countWait = setTimeout(() => {
+    countRoll = setInterval(() => { v >= to ? clearInterval(countRoll) : show(++v); }, 110);
+  }, start + 250);
+  return start + 250 + steps * 110 + 200;
+};
+
+const STEP = 30;
+const letters = (el, t, hold1) => {
+  const words = [...el.querySelectorAll('.w')];
+  words.forEach((w, wi) => {
+    const text = w.textContent; w.textContent = '';
+    const em = !!w.closest('em');
+    [...text].forEach((ch, j) => {
+      const c = document.createElement('span');
+      c.className = 'c'; c.textContent = ch;
+      c.style.setProperty('--t', Math.round(t));
+      const [g1, g2] = (em ? GLOW_EM : GLOW_SOFT)[(wi + j) % 3];
+      c.style.setProperty('--g1', g1); c.style.setProperty('--g2', g2);
+      w.append(c);
+      t += STEP;
+    });
+    if (wi < words.length - 1) t += STEP + (!hold1 && /[.?!…]$/.test(text) ? 450 : 0);
+  });
+  el.querySelectorAll('em').forEach(em => {
+    const cs = [...em.querySelectorAll('.c')];
+    if (!cs.length) return;
+    const t0 = +cs[0].style.getPropertyValue('--t'), t1 = +cs.at(-1).style.getPropertyValue('--t');
+    em.style.setProperty('--t0', t0); em.style.setProperty('--tn', t1 - t0);
+    cs.forEach((c, n) => c.style.setProperty('--ei', n));
+  });
+  return t;
+};
+
+const draw = s => {
+  stage.replaceChildren();
+  let t = s.delay ?? 200;
+  clearTimeout(countWait); clearInterval(countRoll);
+  if (!s.count) lastCount = 0;   // 세트가 끝나면 다음 세트는 0 부터 센다
+  for (const [cls, html] of [['count', s.count], ['headline', s.text], ['meta', s.meta]]) {
+    if (!html) continue;
+    const el = document.createElement(cls === 'count' ? 'div' : 'p');
+    el.className = cls;
+    stage.append(el);
+    if (cls === 'count') {
+      const [, v, total] = /^(\d+)<u>\/(\d+)<\/u>$/.exec(html);
+      t = drawCount(el, +v, +total, t) + 380;   // 숫자가 다 올라간 뒤 문장이 이어진다
+      continue;
+    }
+    el.innerHTML = html;
+    split(el);
+    // 카운터 → 문장 → 보조 문구 : 줄마다 한 박자(380ms) 쉬고 이어서 흘러나온다
+    t = letters(el, t, s.hold1) + 380;
+  }
+  // 강조어(em)에 글리밍 겹 한 장 (시각은 letters 가 준 --t0 · --tn)
+  for (const em of stage.querySelectorAll('em')) {
+    em.classList.add('glim');
+    em.dataset.t = em.textContent;
+  }
+};
+
+const body = document.body;
+let idx = 0, timer;
+
+const field = document.querySelector('.field');
+const go = n => {
+  clearTimeout(timer);
+  idx = n;
+  const s = SCENES[n];
+  // idle 에서 나갈 때 : 배회 애니메이션을 끊으면 translate 가 0 으로 튀어 다른 물체처럼 보인다.
+  // 지금 값을 인라인으로 물려 class 를 바꾸고 다음 프레임에 지워, 전환이 그 자리에서 이어지게 한다
+  if (body.classList.contains('idle') && s.look !== 'idle') {
+    const cs = getComputedStyle(field);
+    field.style.translate = cs.translate; field.style.rotate = cs.rotate;
+    field.style.borderRadius = cs.borderRadius;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      field.style.translate = field.style.rotate = field.style.borderRadius = '';
+    }));
+  }
+  body.className = [
+    body.classList.contains('bare')  ? 'bare'  : '',
+    body.classList.contains('kiosk') ? 'kiosk' : '',
+    s.look,
+  ].filter(Boolean).join(' ');
+  draw(s);
+  if (s.hold) timer = setTimeout(() => go(n + 1), s.hold);
+};
+// 카메라가 없을 때의 수동 진행 : 한 단계씩, 마지막에서 리셋
+const tap = () => go(idx >= SCENES.length - 1 ? 0 : idx + 1);
+window.__go = go; window.__step = () => idx;
+
+const toggle = document.querySelector('.toggle');
+toggle.addEventListener('pointerdown', e => e.stopPropagation());
+toggle.addEventListener('click', () => {
+  const off = body.classList.toggle('bare');
+  toggle.setAttribute('aria-pressed', String(!off));
+  fit();
+});
+
+const SOLO = new URLSearchParams(location.search).get('s');
+
+if (SOLO === null) {
+  addEventListener('pointerdown', tap);
+  addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') tap(); });
+  go(0);
+} else {
+  // 한 장면만 정지 : 자동 진행도 카메라도 없다
+  body.classList.add('bare', 'kiosk', 'shot');
+  go(+SOLO);
+  clearTimeout(timer);
+  fit();
+}
+</script>
+
+<script type="module">
+/* ---------- 카메라 인터랙션 (병원 로봇과 동일 스펙) ----------
+   장면 0 : 얼굴이 가까워지면(≈30cm 이내) 원이 커진다
+   장면 1 : 엄지척을 올리면 다음 단계로 넘어간다
+   카메라/권한이 없으면 조용히 꺼지고 탭 조작만 남는다. */
+
+// ponytail: 웹캠 화각마다 다르므로 실기기에서 이 값들만 보정한다.
+const NEAR = .34;   // 얼굴 폭 ÷ 프레임 폭. 화각 65° 기준 0.34 ≈ 30cm, 0.5 ≈ 20cm
+const HITS = 3;     // 트리거까지 필요한 누적 프레임
+const GMIN = .35;   // 엄지척으로 인정할 최소 점수
+
+const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
+const M = 'https://storage.googleapis.com/mediapipe-models';
+const stat  = document.querySelector('.camstat');
+const video = document.getElementById('camv');
+const cv    = document.getElementById('camc');
+const cx    = cv.getContext('2d');
+const say   = t => { stat.textContent = t; };
+
+let fd, gr, hits = 0, last = -1;
+
+const loop = () => {
+  requestAnimationFrame(loop);
+  const t = performance.now();
+  if (t - last < 100) return;          // 10fps 면 충분
+  last = t;
+  if (!video.videoWidth) return;
+
+  const face = fd.detectForVideo(video, t).detections[0];
+  const hand = gr.recognizeForVideo(video, t);
+  const ratio = face ? face.boundingBox.width / video.videoWidth : 0;
+  const g = (hand.gestures ?? []).map(c => c[0]).filter(Boolean)
+              .sort((x, y) => y.score - x.score)[0];
+  const up = (hand.gestures ?? []).some(c => c.some(k => k.categoryName === 'Thumb_Up' && k.score >= GMIN));
+
+  const sx = cv.width / video.videoWidth, sy = cv.height / video.videoHeight;
+  cx.clearRect(0, 0, cv.width, cv.height);
+  if (face) {
+    const b = face.boundingBox;
+    cx.strokeStyle = ratio >= NEAR ? '#3ddc84' : '#ffcc00';
+    cx.lineWidth = 3;
+    cx.strokeRect(b.originX * sx, b.originY * sy, b.width * sx, b.height * sy);
+  }
+  for (const marks of hand.landmarks ?? []) {
+    cx.fillStyle = up ? '#3ddc84' : '#4aa8ff';
+    for (const p of marks) {
+      cx.beginPath(); cx.arc(p.x * cv.width, p.y * cv.height, 3, 0, 6.284); cx.fill();
+    }
+  }
+
+  const n = window.__step();
+  say('얼굴 ' + (ratio ? Math.round(ratio * 100) + '%' : '—') + ' / ' + Math.round(NEAR * 100) + '%\n'
+    + '제스처 ' + (g ? g.categoryName + ' ' + g.score.toFixed(2) : '—') + '\n'
+    + (n === 0 ? '얼굴을 가까이' : n === 1 ? '엄지척을 올리세요' : '진행 중'));
+
+  // 트리거 : 놓친 프레임 하나에 초기화되지 않게 깎기만 한다
+  const wants = n === 0 ? ratio >= NEAR : n === 1 ? up : false;
+  hits = wants ? hits + 1 : Math.max(0, hits - 1);
+  if (wants && hits >= HITS) { hits = 0; window.__go(n + 1); }
+};
+
+if (new URLSearchParams(location.search).has('s')) say('');
+else try {
+  const { FilesetResolver, FaceDetector, GestureRecognizer } = await import(V + '/vision_bundle.mjs');
+  const vision = await FilesetResolver.forVisionTasks(V + '/wasm');
+  [fd, gr] = await Promise.all([
+    FaceDetector.createFromOptions(vision, { runningMode: 'VIDEO',
+      baseOptions: { modelAssetPath: M + '/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' } }),
+    GestureRecognizer.createFromOptions(vision, { runningMode: 'VIDEO', numHands: 2,
+      minHandDetectionConfidence: .4, minHandPresenceConfidence: .4, minTrackingConfidence: .4,
+      cannedGesturesClassifierOptions: { scoreThreshold: .2 },
+      baseOptions: { modelAssetPath: M + '/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task' } }),
+  ]);
+  say('카메라 권한을 허용해 주세요');
+  video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
+  await video.play();
+  say('카메라 ON');
+  requestAnimationFrame(loop);
+} catch (e) {
+  say('카메라 없음 — 화면을 탭해 진행');
+  console.warn('[cam]', e);
+}
+</script>
+</body>
+</html>
