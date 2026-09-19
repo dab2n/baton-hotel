@@ -22,23 +22,14 @@
 
 ## 장면
 
-문구는 아직 조정 중이라 헬스장 흐름(인사 → 컨텍스트 → 진행 카운트 → 마무리)을 호텔 체크인으로 옮겨 둔 임시본이다.
+문구는 아직 조정 중이다. 제안된 흐름(대기 → 연결 → 첫 문장)까지만 둔다.
 
 | # | 그래픽 | 화면 | 다음으로 |
 |---|---|---|---|
-| 1 | idle | 검정 + 중앙 구슬 | 얼굴 근접 |
+| 1 | idle | 검정 + 떠다니는 구슬 (큰 소리 → 집중, 5초 동안 얼굴 없음 → 네 알 두근두근) | 얼굴 근접 · 엄지척 |
 | 2 | fill | 문구 없음 | 엄지척 |
-| 3 | connect | 병원 로봇과 같은 별 모션 → 끝난 검정 위에 `Nav 001` / `ptn 001` (숫자는 5x7 도트, 스트로크 톤) → 완전히 사라짐 | 5.2s + .9s (위아래 색 띠가 함께 나왔다 사라짐) |
-| 4 | full | 스트로크(R 410)가 켜진 뒤 `It’s been a long day.` / `Shall I run a shower?` | 탭 |
-| 4 | full | `Welcome, Leo.` | 4.3s |
-| 5 | full | `Your reservation` · Deluxe King · 2 nights | 5.6s |
-| 6 | full | `Checking you in…` | 3.8s |
-| 7 | full | `Your room is ready.` · Room 1207 | 5.6s |
-| 8 | full | `Follow me.` · To the elevator | 4.6s |
-| 9–11 | full | 층수 카운트 `3/12` `7/12` `12/12` | 4.0~4.6s |
-| 12 | full | `Here is your room.` · 1207 | 5.0s |
-| 13 | full | `Good to know` · 조식/Wi-Fi | 5.6s |
-| 14 | full | `Enjoy your stay, Leo.` | 유지 |
+| 3 | connect | 엄지척 연결 영상만 → 끝난 검정 위에 위아래 색 띠가 원을 그리며 `Nav 001` / `ptn 001` → 완전히 사라짐 | 5.2s + .9s |
+| 4 | full | 스트로크가 퍼져 나온 뒤 `It’s been a long day.` / `How about some time to unwind?` | 끝 (탭하면 처음으로) |
 
 ## 크기
 
