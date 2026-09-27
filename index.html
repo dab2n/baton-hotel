@@ -11,9 +11,10 @@
 
    그래픽 상태는 4가지뿐 : idle → fill → connect → full
      idle    중앙의 작은 구슬 (얼굴 대기). 큰 소리엔 가운데로 모여 듣는다
-     fill    구슬이 화면을 채움 (엄지척 대기, 문구 없음)
-     connect 엄지척 인식 : 병원 로봇과 같은 별 모션 → 가장자리 스트로크, 이어서 첫 문장
+     fill    얼굴 인식 : 구슬이 중심으로 사라지고 위아래 띠가 한 바퀴 돌며 첫 문장 (엄지척 대기)
+     connect 엄지척 인식 : 병원 로봇과 같은 별 모션 (문구 없음)
      full    문구 (스트로크는 가장자리에 계속)
+     bye     마무리 : 마지막 화면이 걷히고 띠와 엔딩 멘트 → 띠가 돌며 지워지고 idle 로
    장면 목록은 아래 SCENES 배열 하나로만 관리한다.
 */
 
@@ -121,7 +122,9 @@ body.idle .screen::before, body.idle .screen::after, body.idle .rimlight{ opacit
           mask:radial-gradient(circle closest-side, transparent 70%, #000 92%);
   opacity:.55; transition:opacity 1.4s ease; animation:rimOrbit 18s linear infinite; }
 @keyframes rimOrbit{ to{ rotate:360deg; } }
-body.fill .screen::before, body.fill .screen::after{ opacity:.85; }
+/* 다가감 : 띠는 캔버스(.bandc)가 12시부터 한 바퀴 그리며 나타난다 (병원과 같다) */
+body.fill .screen::before, body.fill .screen::after{ opacity:0; transition:none; }
+body.fill .bandc{ opacity:.85; }
 body.fill .rimlight{ opacity:.35; }
 .bezel{ position:absolute; inset:0; width:1080px; height:1080px;
         z-index:4; pointer-events:none; }
@@ -145,8 +148,9 @@ body.fill .rimlight{ opacity:.35; }
 }
 
 body.idle   .field{ transform:translate(1px,145.5px) scale(.22); }
-/* 엄지척 대기 : 구슬이 화면을 채우지만 아주 옅게 + 색을 빼 화면은 어둡게 유지 */
-body.fill   .field{ transform:translate(1px,145.5px) scale(1.2); opacity:.03; filter:grayscale(1); }
+/* 다가감 : 구슬은 중심으로 작아지며 어두워져 사라진다 (병원과 같다) */
+body.fill   .field{ transform:translate(1px,145.5px) scale(.16); opacity:0; }
+body.fill   .blur39{ filter:blur(30px); }
 /* 엄지척 : 구슬은 그 자리·그 모습(노랑) 그대로 옅어지며 사라진다 (흑백으로 바뀌며 커지면 흰 덩어리가 별 모션을 흐린다) */
 body.connect .field{ transform:translate(1px,145.5px) scale(.22); opacity:0; transition-duration:1.8s, .6s, 1.2s, 1.2s, 1.2s, 1.2s, 1.1s; }
 body.connect .blur39{ filter:blur(17px); }
@@ -305,13 +309,17 @@ body.full .screen::before, body.full .screen::after{ transition:none; }   /* 연
    CSS 마스크(원뿔+직선)를 매 프레임 바꾸면 큰 화면(2K)에서 다시 그리는 비용이 커 초당 20프레임 아래로 끊긴다 →
    띠를 절반 해상도 캔버스(.bandc)에 직접 그린다 (부드러운 그라디언트라 해상도 차이가 보이지 않는다). 그리는 법은 JS drawBands */
 .bandc{ position:absolute; inset:0; width:1080px; height:1080px; pointer-events:none; opacity:0; }
-body.connect .bandc{ opacity:1; }
 body.connect .screen::before, body.connect .screen::after{ opacity:0; transition:none; }
-/* 가장자리 발광 : 별 모션 동안엔 끄고, 띠가 도는 동안 스며 나온다 (먼저 한 조각만 떠 있지 않게) */
-@keyframes rimIn { 0%, 55%{ opacity:0; } 100%{ opacity:.55; } }
-@keyframes rimOut{ from{ opacity:.55; } to{ opacity:0; } }
-body.connect .rimlight{ animation:rimIn 3.8s both, rimOrbit 18s linear infinite; }
-body.connect.out .rimlight{ animation:rimOut .9s both, rimOrbit 18s linear infinite; }
+body.connect .rimlight{ opacity:0; }   /* 별 모션 동안엔 가장자리도 끈다 */
+.bandc.on{ opacity:.85; }
+/* ---------- bye : 세션이 끝나면 마지막 화면이 걷히고, 띠와 엔딩 멘트가 나온 뒤 띠가 돌며 지워진다 ---------- */
+body.bye .field{ transform:translate(1px,145.5px) scale(.17); opacity:0; }
+body.bye .blur39{ filter:blur(30px); }
+body.bye .screen::before, body.bye .screen::after{ opacity:0; transition:none; }
+body.bye .bandc{ opacity:.85; }
+body.bye .rimlight{ opacity:.35; }
+body.eraseb .screen::before, body.eraseb .screen::after{ opacity:0; transition:none; }
+body.eraseb .rimlight{ opacity:0; transition:opacity 1.2s ease; }
 
 
 /* ---------- 본문 : 한 장면 = 카운터 + 문장 + 부가정보 ---------- */
@@ -478,11 +486,13 @@ fit();
    hold1 : 한 호흡으로 읽히는 짧은 문장 — 문장부호에서 쉬지 않는다             */
 const SCENES = [
   { look:'idle',   hold:0 },                                                   // 얼굴 대기
-  { look:'fill',   hold:0 },                                                   // 01a 엄지척 대기 (문구 없음)
-  { look:'connect', hold:5200, delay:2500, out:true, tone:'stroke',   // 01a 엄지척 인식 → 별 모션이 끝난 검정 위에 기기 정보, 다 지운 뒤 다음으로
-    text:'Nav <span class="dg">001</span><br>ptn <span class="dg">001</span>' },
-  { look:'full',   hold:0, delay:1300,                              // 01b 스트로크가 켜지고 나서 첫 문장
-    text:'It&rsquo;s been a long day.<br>How about some time<br>to unwind?' },   // 한 줄이면 링(R 396)에 닿는다
+  { look:'fill',   hold:0, delay:1750, out:true,                     // 01a 얼굴 인식 : 띠가 한 바퀴 돌며 첫 문장, 엄지척을 기다린다
+    text:'It&rsquo;s been a long day,<br>Leo' },
+  { look:'connect', hold:3200, out:true },                           // 01a 엄지척 인식 → 별 모션 (문구 없음)
+  { look:'full',   hold:6200, delay:1300, out:true,                  // 01b 스트로크가 켜지고 나서 다음 문장
+    text:'How about some time<br>to unwind?' },
+  { look:'bye',    hold:4200, delay:900, hold1:true, out:true,       // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로
+    text:'Rest well, Leo!' },
 ];
 
 const stage = document.querySelector('.stage');
@@ -686,7 +696,7 @@ const BANDS = [
   { stops: [[.70, 'rgba(43,49,60,0)'], [.87, 'rgba(39,45,55,.4)'], [.97, '#2B313C'], [1, '#2B313C']],
     lin: e => [[0, 1], [.06 + .30 * e, 1], [.17 + .33 * e, .72], [.30 + .36 * e, 0]], top: false },
 ];
-const drawBands = (a0, a1, ext, alpha) => {
+const drawBands = (a0, a1, ext, alpha, endFade = 0, bandAlpha = [1, 1]) => {
   bx.clearRect(0, 0, 540, 540);
   if (alpha <= 0 || a1 <= a0) return;
   // 원뿔 마스크 (각도는 12시 기준, 시계 방향) : 꼬리 a0 → +30° 불투명 … 머리 a1-30° → a1 투명
@@ -694,8 +704,11 @@ const drawBands = (a0, a1, ext, alpha) => {
   const o1 = p(Math.min(a0 + 30, a1 - 30)), o2 = Math.max(o1, p(a1 - 30)), o3 = Math.max(o2, p(a1));
   const cone = tx.createConicGradient(-Math.PI / 2, 270, 270);
   cone.addColorStop(p(a0), 'rgba(0,0,0,0)'); cone.addColorStop(Math.max(p(a0), o1), '#000');
-  cone.addColorStop(o2, '#000'); cone.addColorStop(o3, 'rgba(0,0,0,0)');
-  for (const B of BANDS) {
+  if (endFade > 0) {   // 지울 때 : 12시 바로 왼쪽(끝)도 함께 흐려 이음매가 서지 않게
+    const oe = Math.max(o1, 1 - 40 / 360 * endFade);
+    cone.addColorStop(oe, '#000'); cone.addColorStop(1, `rgba(0,0,0,${(1 - endFade).toFixed(3)})`);
+  } else { cone.addColorStop(o2, '#000'); cone.addColorStop(o3, 'rgba(0,0,0,0)'); }
+  BANDS.forEach((B, bi) => {
     tx.globalCompositeOperation = 'source-over'; tx.clearRect(0, 0, 540, 540);
     const rg = tx.createRadialGradient(270, 270, 0, 270, 270, 265);
     B.stops.forEach(([o, c]) => rg.addColorStop(o, c));
@@ -705,19 +718,32 @@ const drawBands = (a0, a1, ext, alpha) => {
     B.lin(ext).forEach(([o, a]) => lg.addColorStop(clamp01(o), `rgba(0,0,0,${a})`));
     tx.fillStyle = lg; tx.fillRect(0, 0, 540, 540);
     tx.fillStyle = cone; tx.fillRect(0, 0, 540, 540);
-    bx.globalAlpha = alpha; bx.drawImage(bandTmp, 0, 0); bx.globalAlpha = 1;
-  }
+    bx.globalAlpha = alpha * bandAlpha[bi]; bx.drawImage(bandTmp, 0, 0); bx.globalAlpha = 1;
+  });
 };
 let bandRAF;
-const bandsRun = () => {
+// 인사 뒤 : 12시부터 돌며 띠를 지운다 (그 사이 구슬이 떠오른다)
+const eraseBands = () => {
+  cancelAnimationFrame(bandRAF);
+  body.classList.add('eraseb'); bandc.classList.add('on');
+  const t0 = performance.now();
+  const f = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (t > 1.4) { bx.clearRect(0, 0, 540, 540); bandc.classList.remove('on'); body.classList.remove('eraseb'); return; }
+    drawBands(400 * sweepEase(clamp01(t / 1.3)) - 40, 400, 0, 1, clamp01(t / .35));
+    bandRAF = requestAnimationFrame(f);
+  };
+  f();
+};
+const bandsRun = (look = 'fill') => {
   cancelAnimationFrame(bandRAF);
   const t0 = performance.now(); let outAt = 0;
   const frame = () => {
-    if (!body.classList.contains('connect')) { bx.clearRect(0, 0, 540, 540); return; }
+    if (!body.classList.contains(look)) { bx.clearRect(0, 0, 540, 540); return; }
     const t = (performance.now() - t0) / 1000;
-    const a1 = 390 * sweepEase(clamp01((t - 2.1) / 1.7));
-    const a0 = t < 3.5 ? 0 : -30 * clamp01((t - 3.5) / .3);
-    const ext = t < 3.8 ? 1 : 1 - extEase(clamp01((t - 3.8) / 1.4));
+    const a1 = 390 * sweepEase(clamp01((t - .3) / 1.7));
+    const a0 = t < 1.7 ? 0 : -30 * clamp01((t - 1.7) / .3);
+    const ext = t < 2 ? 1 : 1 - extEase(clamp01((t - 2) / 1.4));
     if (body.classList.contains('out') && !outAt) outAt = t;
     const alpha = outAt ? 1 - clamp01((t - outAt) / .9) : 1;
     drawBands(a0, a1, ext, alpha);
@@ -744,6 +770,7 @@ const go = n => {
       field.style.translate = field.style.rotate = field.style.borderRadius = field.style.scale = '';
     }));
   }
+  if (s.look === 'idle' && body.classList.contains('bye')) eraseBands();   // 인사 뒤 : 띠를 돌려 지우며 대기 상태로
   body.className = [
     body.classList.contains('bare')  ? 'bare'  : '',
     body.classList.contains('kiosk') ? 'kiosk' : '',
@@ -751,15 +778,17 @@ const go = n => {
     s.look,
   ].filter(Boolean).join(' ');
   draw(s);
-  // 연결 : 별 모션만. 스트로크는 연결 문구가 완전히 사라진 뒤 다음 장면(full)에서 처음부터 켜진다
-  if (s.look === 'connect') { star.currentTime = 0; star.play().catch(() => {}); bandsRun(); }
+  if (s.look === 'fill' || s.look === 'bye') requestAnimationFrame(() => bandsRun(s.look));
+  // 연결 : 별 모션만. 스트로크는 다음 장면(full)에서 처음부터 켜진다
+  if (s.look === 'connect') { star.currentTime = 0; star.play().catch(() => {}); }
   else star.pause();
   if (s.look === 'full') stroke.play().catch(() => {}); else { stroke.pause(); stroke.currentTime = RSTART; }
   // out : 머문 뒤 문구를 먼저 다 지우고(.9s) 넘어간다
   if (s.hold) timer = setTimeout(() => {
-    if (!s.out) return go(n + 1);
+    const nx = n + 1 >= SCENES.length ? 0 : n + 1;
+    if (!s.out) return go(nx);
     stage.classList.add('out'); body.classList.add('out');
-    timer = setTimeout(() => go(n + 1), 900);
+    timer = setTimeout(() => go(nx), 900);
   }, s.hold);
 };
 // 카메라가 없을 때의 수동 진행 : 한 단계씩, 마지막에서 리셋
