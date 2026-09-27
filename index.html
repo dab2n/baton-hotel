@@ -27,13 +27,20 @@ html,body{ height:100%; margin:0; overflow:hidden; background:#0B0F18; }
 html:has(.shot), html:has(.shot) body{ background:transparent; }   /* ?s=N : 배경색 없이 UI 만 */
 body{
   display:flex; align-items:center; justify-content:center;
-  font-family:var(--ff-en,'Delight'), 'Pretendard Web', system-ui, sans-serif;
+  font-family:var(--ff-en,'Delight'), var(--ff-ko,'SF Pro KR'), 'Pretendard Web', system-ui, sans-serif;
   -webkit-font-smoothing:antialiased;
   cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none;
 }
 /* 자간 3% : letter-spacing 은 계산된 px 로 상속돼서 요소마다 em 을 다시 풀어준다 */
 .device, .device *{ letter-spacing:0.03em; }
 
+/* 한글 : 병원 로봇과 같은 SF Pro KR (한글 구간만) */
+@font-face{ font-family:'SF Pro KR'; font-weight:600; font-display:block;
+  src:url('fonts/SFProKR-Semibold.otf') format('opentype');
+  unicode-range:U+1100-11FF, U+3130-318F, U+AC00-D7A3; }
+@font-face{ font-family:'SF Pro KR'; font-weight:700; font-display:block;
+  src:url('fonts/SFProKR-Bold.otf') format('opentype');
+  unicode-range:U+1100-11FF, U+3130-318F, U+AC00-D7A3; }
 /* 폰트 대체 : Delight 가 없는 컴퓨터(배포 링크)에선 Pretendard 로. 자간은 굵기·크기별 실측 보정 */
 @font-face{ font-family:'Pretendard Web'; font-weight:400; font-display:swap;
   src:local('Pretendard Regular'), local('Pretendard-Regular'), url('pretendard/Pretendard-Regular.subset.woff2') format('woff2'); }
@@ -125,7 +132,8 @@ body.idle .screen::before, body.idle .screen::after, body.idle .rimlight{ opacit
 /* 다가감 : 띠는 캔버스(.bandc)가 12시부터 한 바퀴 그리며 나타난다 (병원과 같다) */
 body.fill .screen::before, body.fill .screen::after{ opacity:0; transition:none; }
 body.fill .bandc{ opacity:.85; }
-body.fill .rimlight{ opacity:.35; }
+@keyframes rimIn{ 0%, 15%{ opacity:0; } 100%{ opacity:.35; } }   /* 병원과 같은 등장 */
+body.fill .rimlight{ opacity:.35; animation:rimIn 2s both, rimOrbit 18s linear infinite; }
 .bezel{ position:absolute; inset:0; width:1080px; height:1080px;
         z-index:4; pointer-events:none; }
 
@@ -319,7 +327,7 @@ body.bye .screen::before, body.bye .screen::after{ opacity:0; transition:none; }
 body.bye .bandc{ opacity:.85; }
 body.bye .rimlight{ opacity:.35; }
 /* 인사는 다 쓰인 뒤(3.3s) 옅어지고, 그다음 띠가 돌며 지워진다 (병원과 같다) */
-body.bye .headline{ animation:byeOut .7s ease 3.3s both; }
+body.bye .headline{ animation:byeOut .6s ease 3.4s both; }   /* 병원과 같은 시각 */
 @keyframes byeOut{ to{ opacity:0; } }
 body.eraseb .screen::before, body.eraseb .screen::after{ opacity:0; transition:none; }
 body.eraseb .rimlight{ opacity:0; transition:opacity 1.2s ease; }
@@ -356,6 +364,9 @@ body.eraseb .rimlight{ opacity:0; transition:opacity 1.2s ease; }
 .countdots .dim circle.on{ opacity:.42; }   /* "/10" 쪽 */
 @keyframes countIn{ from{ opacity:0; } to{ opacity:1; } }
 .headline{ font-size:76px; font-weight:500; line-height:1.45; }
+/* 한국어 문장 : 병원·헬스장과 같은 자간(-2%)·굵기 (기본 +3% 는 한글에서 너무 벌어진다) */
+.headline.ko, .headline.ko *{ letter-spacing:-0.02em; }
+.headline.ko{ font-weight:500; }
 .meta    { font-size:52px; font-weight:400; line-height:1.5; }
 /* 글자는 흰색이 줄 박스 66% 까지 가득하고 아래 끝에서만 살짝 옅어진다. 강조어는 흰색 그대로 + 글리밍.
    색은 글자(.c)마다 입힌다 : 단어(.w)에 입히면 background-clip:text 가 아직 안 켜진 글자까지 그려 단어가 통째로 먼저 보인다 */
@@ -494,13 +505,13 @@ fit();
 const SCENES = [
   { look:'idle',   hold:0 },                                                   // 얼굴 대기
   { look:'fill',   hold:0, delay:2000, out:true,                     // 01a 얼굴 인식 : 띠가 한 바퀴 돌며 한국어로 묻는다 (엄지척 대기)
-    text:'무엇이 필요하신가요?' },
+    cls:'ko', text:'무엇이 필요하신가요?' },
   { look:'connect', hold:3200, out:true },                           // 01a 엄지척 인식 → 별 모션 (문구 없음)
   { look:'full',   hold:5600, delay:1300, out:true,                  // 01b 스트로크와 함께 첫 문장
     text:'It&rsquo;s been a long day,<br>Leo' },
   { look:'full',   hold:6200, delay:600, out:true,                   // 01c 이어지는 문장
     text:'How about some time<br>to unwind?' },
-  { look:'bye',    hold:4200, delay:900, hold1:true,                 // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로
+  { look:'bye',    hold:4200, delay:1000, hold1:true, rate:1.4,      // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로 (병원과 같은 속도·시각)
     text:'Rest well, Leo!' },
 ];
 
@@ -600,7 +611,7 @@ const drawCount = (el, to, total, start) => {
 };
 
 const STEP = 30;
-const letters = (el, t, hold1) => {
+const letters = (el, t, hold1, rate = 1) => {
   const words = [...el.querySelectorAll('.w')];
   words.forEach((w, wi) => {
     const text = w.textContent; w.textContent = '';
@@ -612,13 +623,13 @@ const letters = (el, t, hold1) => {
       const [g1, g2] = (em ? GLOW_EM : GLOW_SOFT)[(wi + j) % 3];
       c.style.setProperty('--g1', g1); c.style.setProperty('--g2', g2);
       w.append(c);
-      t += STEP;
+      t += STEP * rate;
     });
     const next = words[wi + 1];
     if (next) {
       const lineBreak = next.closest('.ln') !== w.closest('.ln');
       const endsSentence = /[.?!…]$/.test(text);
-      t += STEP + (!hold1 && endsSentence ? 450 : 0) + (lineBreak && endsSentence ? 380 : 0);   // 한 문장이 두 줄로 넘어갈 땐 쉬지 않는다
+      t += (STEP + (!hold1 && endsSentence ? 450 : 0) + (lineBreak && endsSentence ? 380 : 0)) * rate;   // 한 문장이 두 줄로 넘어갈 땐 쉬지 않는다
     }
   });
   // 두 줄 : 둘째 줄 첫 글자 시각(--t2) — 그때 문장이 반 줄 위로 올라간다
@@ -636,7 +647,8 @@ const letters = (el, t, hold1) => {
 };
 
 const draw = s => {
-  stage.replaceChildren();
+  // 엄지척(별 모션)은 앞의 한국어 문장 위로 올라온다 : 그 장면에선 문장을 지우지 않는다 (병원·헬스장과 같다)
+  if (s.text || s.count || s.meta || s.look !== 'connect') stage.replaceChildren();
   stage.classList.remove('out');
   stage.dataset.tone = s.tone ?? '';
   let t = s.delay ?? 200;
@@ -645,7 +657,7 @@ const draw = s => {
   for (const [cls, html] of [['count', s.count], ['headline', s.text], ['meta', s.meta]]) {
     if (!html) continue;
     const el = document.createElement(cls === 'count' ? 'div' : 'p');
-    el.className = cls;
+    el.className = cls + (cls === 'headline' && s.cls ? ' ' + s.cls : '');
     stage.append(el);
     if (cls === 'count') {
       const [, v, total] = /^(\d+)<u>\/(\d+)<\/u>$/.exec(html);
@@ -656,7 +668,7 @@ const draw = s => {
     el.innerHTML = '<span class="ln">' + html.replaceAll('<br>', '</span><span class="ln">') + '</span>';
     split(el);
     // 카운터 → 문장 → 보조 문구 : 줄마다 한 박자(380ms) 쉬고 이어서 흘러나온다
-    t = letters(el, t, s.hold1) + 380;
+    t = letters(el, t, s.hold1, s.rate) + 380;
   }
   for (const c of stage.querySelectorAll('.dg .c')) c.replaceChildren(dotGlyph(c.textContent));
   // 강조어(em)에 글리밍 겹 한 장 (시각은 letters 가 준 --t0 · --tn)
