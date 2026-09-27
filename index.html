@@ -318,6 +318,9 @@ body.bye .blur39{ filter:blur(30px); }
 body.bye .screen::before, body.bye .screen::after{ opacity:0; transition:none; }
 body.bye .bandc{ opacity:.85; }
 body.bye .rimlight{ opacity:.35; }
+/* 인사는 다 쓰인 뒤(3.3s) 옅어지고, 그다음 띠가 돌며 지워진다 (병원과 같다) */
+body.bye .headline{ animation:byeOut .7s ease 3.3s both; }
+@keyframes byeOut{ to{ opacity:0; } }
 body.eraseb .screen::before, body.eraseb .screen::after{ opacity:0; transition:none; }
 body.eraseb .rimlight{ opacity:0; transition:opacity 1.2s ease; }
 
@@ -401,6 +404,10 @@ body.eraseb .rimlight{ opacity:0; transition:opacity 1.2s ease; }
   from{ filter:blur(0) drop-shadow(0 0 .012em var(--g1)) drop-shadow(0 0 .03em var(--g2)); }
   to  { filter:blur(0) drop-shadow(0 0 .04em var(--g1))  drop-shadow(0 0 .1em var(--g2)); }   /* 가장자리만 얇게 일렁인다 */
 }
+.stage .ln{ display:block; }
+/* 두 줄 문장 원칙(병원·헬스장과 같다) : 첫 줄이 가운데에 먼저 쓰이고, 둘째 줄이 나오기 직전 반 줄 위로 */
+@keyframes lineUp{ from{ translate:0 .5lh; } to{ translate:0 0; } }
+.stage .two{ animation:lineUp .6s cubic-bezier(.4,0,.2,1) both; animation-delay:calc(var(--t2) * 1ms - 120ms); }
 .stage .c{ animation:letterIn .95s cubic-bezier(.25,.6,.3,1) both; animation-delay:calc(var(--t) * 1ms); }
 .stage em .c{ animation:letterIn .95s cubic-bezier(.25,.6,.3,1) both, emGlow 2.4s ease-in-out infinite alternate;
   animation-delay:calc(var(--t) * 1ms), calc(var(--ei) * 90ms + var(--t0) * 1ms + .95s); }
@@ -486,12 +493,14 @@ fit();
    hold1 : 한 호흡으로 읽히는 짧은 문장 — 문장부호에서 쉬지 않는다             */
 const SCENES = [
   { look:'idle',   hold:0 },                                                   // 얼굴 대기
-  { look:'fill',   hold:0, delay:1750, out:true,                     // 01a 얼굴 인식 : 띠가 한 바퀴 돌며 첫 문장, 엄지척을 기다린다
-    text:'It&rsquo;s been a long day,<br>Leo' },
+  { look:'fill',   hold:0, delay:2000, out:true,                     // 01a 얼굴 인식 : 띠가 한 바퀴 돌며 한국어로 묻는다 (엄지척 대기)
+    text:'무엇이 필요하신가요?' },
   { look:'connect', hold:3200, out:true },                           // 01a 엄지척 인식 → 별 모션 (문구 없음)
-  { look:'full',   hold:6200, delay:1300, out:true,                  // 01b 스트로크가 켜지고 나서 다음 문장
+  { look:'full',   hold:5600, delay:1300, out:true,                  // 01b 스트로크와 함께 첫 문장
+    text:'It&rsquo;s been a long day,<br>Leo' },
+  { look:'full',   hold:6200, delay:600, out:true,                   // 01c 이어지는 문장
     text:'How about some time<br>to unwind?' },
-  { look:'bye',    hold:4200, delay:900, hold1:true, out:true,       // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로
+  { look:'bye',    hold:4200, delay:900, hold1:true,                 // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로
     text:'Rest well, Leo!' },
 ];
 
@@ -605,8 +614,17 @@ const letters = (el, t, hold1) => {
       w.append(c);
       t += STEP;
     });
-    if (wi < words.length - 1) t += STEP + (!hold1 && /[.?!…]$/.test(text) ? 450 : 0);
+    const next = words[wi + 1];
+    if (next) {
+      const lineBreak = next.closest('.ln') !== w.closest('.ln');
+      const endsSentence = /[.?!…]$/.test(text);
+      t += STEP + (!hold1 && endsSentence ? 450 : 0) + (lineBreak && endsSentence ? 380 : 0);   // 한 문장이 두 줄로 넘어갈 땐 쉬지 않는다
+    }
   });
+  // 두 줄 : 둘째 줄 첫 글자 시각(--t2) — 그때 문장이 반 줄 위로 올라간다
+  const lns = el.querySelectorAll('.ln');
+  el.classList.toggle('two', lns.length > 1);
+  if (lns.length > 1) el.style.setProperty('--t2', lns[1].querySelector('.c')?.style.getPropertyValue('--t') ?? 0);
   el.querySelectorAll('em').forEach(em => {
     const cs = [...em.querySelectorAll('.c')];
     if (!cs.length) return;
@@ -634,7 +652,8 @@ const draw = s => {
       t = drawCount(el, +v, +total, t) + 380;   // 숫자가 다 올라간 뒤 문장이 이어진다
       continue;
     }
-    el.innerHTML = html;
+    // 두 줄 문장 : 줄마다 .ln 으로 묶어야 둘째 줄이 나올 때 함께 위로 올라간다
+    el.innerHTML = '<span class="ln">' + html.replaceAll('<br>', '</span><span class="ln">') + '</span>';
     split(el);
     // 카운터 → 문장 → 보조 문구 : 줄마다 한 박자(380ms) 쉬고 이어서 흘러나온다
     t = letters(el, t, s.hold1) + 380;
