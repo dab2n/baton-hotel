@@ -86,7 +86,7 @@ body.bare .ring{ display:none; }
                     transform:translateX(14px); transition:transform .2s; }
 body.bare .toggle .sw{ background:#d6d6d6; }
 body.bare .toggle .sw::after{ transform:none; }
-body.kiosk .toggle{ display:none; }
+body.kiosk .toggle, body.rec .toggle{ display:none; }
 
 /* 카메라 모니터 (테스트용) */
 .cam{ position:fixed; right:16px; bottom:16px; z-index:10; width:240px; }
@@ -96,7 +96,7 @@ body.kiosk .toggle{ display:none; }
 .camview video{ object-fit:cover; }
 .camstat{ margin-top:6px; font-size:11px; line-height:1.5; color:#888;
           text-align:right; white-space:pre-line; }
-body.kiosk .cam{ display:none; }
+body.kiosk .cam, body.rec .cam{ display:none; }   /* ?rec=1 : 영상용 (병원·헬스장과 같은 플래그) */
 
 /* ---------- 스크린 1080x1080 ---------- */
 .screen{
@@ -496,6 +496,7 @@ if (location.hash === '#screen') document.body.classList.add('bare','kiosk');
 
 // scale() 은 단위 없는 수만 받으므로 JS로 계산
 const FILL = .92;
+if (new URLSearchParams(location.search).has('rec')) document.body.classList.add('rec');   // ?rec=1 : 영상용 (버튼·썸네일 숨김)
 const fit = () => document.documentElement.style.setProperty('--s',
   Math.min(innerWidth, innerHeight) * (document.body.classList.contains('kiosk') ? 1 : FILL) /
   parseFloat(getComputedStyle(document.body).getPropertyValue('--fit')));
@@ -818,6 +819,7 @@ const go = n => {
     body.classList.contains('bare')  ? 'bare'  : '',
     body.classList.contains('kiosk') ? 'kiosk' : '',
     body.classList.contains('shot')  ? 'shot'  : '',   // 투명 배경 내보내기 유지
+    body.classList.contains('rec')   ? 'rec'   : '',   // 영상용 플래그도 장면이 바뀌어도 남는다
     s.look,
   ].filter(Boolean).join(' ');
   draw(s);
