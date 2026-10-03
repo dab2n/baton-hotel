@@ -307,16 +307,27 @@ body.connect .star{ opacity:1; }
 @keyframes chipOut{ from{ opacity:1; translate:-50% 0; }    to{ opacity:0; translate:-50% 120px; } }
 body.send .chip.to  { animation:chipIn .7s cubic-bezier(.22,.7,.25,1) both; }
 body.sent .chip.to  { animation:chipOut .55s cubic-bezier(.4,0,.7,.4) both; }
-body.sent .chip.sent{ animation:chipIn .7s cubic-bezier(.22,.7,.25,1) .25s both; }
+/* 보냈다 칩은 알림 : 내려와 서서 2.2초 머물고 물러난다 (그 뒤 가운데 문장이 주인공) */
+body.sent .chip.sent{ animation:chipNotice 3.1s linear .25s both; }
+@keyframes chipNotice{
+  0%    { opacity:0; translate:-50% -120px; animation-timing-function:cubic-bezier(.22,.7,.25,1); }
+  22.6% { opacity:1; translate:-50% 0; animation-timing-function:linear; }
+  72.6% { opacity:1; translate:-50% 0; animation-timing-function:ease; }
+  100%  { opacity:0; translate:-50% -26px; }
+}
 
 /* 하단 글로우 : 헬스장 피드백(.gfb)과 같은 그래픽·같은 일렁임 */
 .sendfx{ position:absolute; inset:0; z-index:2; pointer-events:none; border-radius:50%;
-  opacity:0; translate:0 22%; box-shadow:inset 0 -52px 68.7px -22px rgba(183,228,255,.7);
-  transition:opacity .8s ease, translate .9s cubic-bezier(.25,.8,.3,1); }
+  opacity:0; translate:0 22%; transform-origin:50% 100%;
+  box-shadow:inset 0 -52px 68.7px -22px rgba(183,228,255,.7);
+  transition:opacity .8s ease, translate .9s cubic-bezier(.25,.8,.3,1), scale .9s cubic-bezier(.25,.8,.3,1); }
 .sendfx::before, .sendfx::after{ content:''; position:absolute; inset:0; }
 .sendfx::before{ background:radial-gradient(437px 181px at 509px 902px, #3d67cf 0%, rgba(32,58,140,.85) 42%, rgba(16,26,66,0) 76%); filter:blur(33px); }
 .sendfx::after { background:radial-gradient(222px 154px at 702px 896px, rgba(226,196,120,.75), rgba(226,196,120,0) 70%); opacity:.3; filter:blur(40px); }
 body.send .sendfx{ opacity:1; translate:0 0; }
+/* 보냈다 : 아래로 내려가는 게 아니라 가장자리 쪽으로 번져 나가며 옅어진다 */
+body.sent .sendfx{ opacity:0; translate:0 0; scale:1.45;
+  transition:opacity 1.05s cubic-bezier(.3,0,.5,1), scale 1.25s cubic-bezier(.2,.6,.3,1); }
 body.send .sendfx::before{ animation:fbWobA 5.4s ease-in-out infinite; }
 body.send .sendfx::after { animation:fbWobB 4.1s ease-in-out infinite; }
 @keyframes fbWobA{
@@ -556,7 +567,7 @@ const SCENES = [
   { look:'full',   hold:5200, delay:700, rate:1.8,                   // 01d 주문을 받아 적는다 (피그마 1284:449)
     text:'I&rsquo;ll have your reserved order<br>delivered to your room.' },   // out 없음 : 다음 장면으로 끊지 않고 그대로 이어진다
   { look:'full',   flag:'send', keep:true, hold:3400 },              // 보내는 중 : 그 문장이 자리에서 옅어지고, 칩·하단 글로우·Sending
-  { look:'full',   flag:'sent', fade:true, hold:7000, delay:1200, rate:1.8,     // 보냈다 : 칩이 바뀌고(기존 칩은 아래로) 다음 문장이 쓰인다
+  { look:'full',   flag:'sent', fade:true, hold:8600, delay:3200, rate:1.8,     // 보냈다 : 칩이 바뀌고(기존 칩은 아래로) 다음 문장이 쓰인다
     text:'Please wait a moment.<br>Your delivery will begin in <span class="dg">5</span> minutes.' },
   { look:'bye',    hold:4200, delay:1000, hold1:true, rate:1.4,      // 마무리 : 띠와 엔딩 멘트 → 띠가 돌며 지워지고 대기 상태로 (병원과 같은 속도·시각)
     text:'Rest well, Leo!' },
