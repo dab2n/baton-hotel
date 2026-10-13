@@ -417,6 +417,7 @@ body.fill.leave .stage > *{ translate:0 110px; opacity:0;
 .meta    { font-size:52px; font-weight:400; line-height:1.5; }
 /* 글자는 흰색이 줄 박스 66% 까지 가득하고 아래 끝에서만 살짝 옅어진다. 강조어는 흰색 그대로 + 글리밍.
    색은 글자(.c)마다 입힌다 : 단어(.w)에 입히면 background-clip:text 가 아직 안 켜진 글자까지 그려 단어가 통째로 먼저 보인다 */
+.stage .headline .ln{ animation:auraDrift 9.2s ease-in-out infinite; }
 .stage .c{ background:linear-gradient(180deg,#fff 0 66%,rgba(255,255,255,.55) 100%);
            -webkit-background-clip:text; background-clip:text; color:transparent; }
 .stage em{ font-style:normal; font-weight:600; display:inline-block; }
@@ -455,9 +456,18 @@ body.fill.leave .stage > *{ translate:0 110px; opacity:0;
    강조어는 켜진 뒤에도 번짐이 글자를 따라 물결처럼 일렁인다. 번짐·흐림 크기는 em 단위 (글자가 52~240px 로 제각각) */
 @keyframes letterIn{
   0%   { opacity:0; filter:blur(.05em) drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 0 rgba(0,0,0,0)); }
-  38%  { opacity:1; filter:blur(0)     drop-shadow(0 0 .09em var(--g1)) drop-shadow(0 0 .22em var(--g2)); }
-  100% { opacity:1; filter:blur(0)     drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  38%  { opacity:1; filter:blur(0)     drop-shadow(0 0 .13em var(--g1)) drop-shadow(0 0 .33em var(--g2)); }
+  100% { opacity:1; filter:blur(0)     drop-shadow(0 0 .055em var(--g1)) drop-shadow(0 0 .17em var(--g2)); }   /* 0 으로 꺼지지 않고 옅게 남는다 */
 }
+/* ---------- 글자에 남는 부드러운 컬러 글로우 ----------
+   색은 전체 플로우에 반복해 쓰는 것들 : 크림(#FFF5D3) · 민트(#8AFFF3) · 하늘(#B7E4FF).
+   밝기는 높게, 농도는 낮게 유지해 글자를 덮지 않고 뒤에서만 은은히 돈다 */
+@keyframes auraDrift{
+  0%, 100%{ filter:drop-shadow(0 0 .17em rgba(255,245,211,.26)) drop-shadow(0 0 .36em rgba(255,236,172,.17)); }
+  34%     { filter:drop-shadow(0 0 .18em rgba(190,247,240,.26)) drop-shadow(0 0 .38em rgba(138,255,243,.16)); }
+  67%     { filter:drop-shadow(0 0 .17em rgba(183,228,255,.28)) drop-shadow(0 0 .37em rgba(150,224,250,.17)); }
+}
+
 @keyframes emGlow{
   from{ filter:blur(0) drop-shadow(0 0 .012em var(--g1)) drop-shadow(0 0 .03em var(--g2)); }
   to  { filter:blur(0) drop-shadow(0 0 .04em var(--g1))  drop-shadow(0 0 .1em var(--g2)); }   /* 가장자리만 얇게 일렁인다 */
@@ -600,9 +610,9 @@ const split = el => {
 //  · 문장 끝(.?!…) 뒤 +450ms. 한 호흡 문장(hold1)은 쉬지 않는다
 //  · 일반 글자 번짐은 옅은 색, 강조어(em)는 짙은 색. 강조어에는 첫 글자 시각 --t0, 길이 --tn, 강조어 안 순서 --ei
 //  · inline span 이라 커닝이 끊기지 않는다
-const GLOW_EM   = [['rgba(245,252,131,.95)', 'rgba(113,172,251,.8)'],    // 연두 · 파랑
-                   ['rgba(138,255,243,.95)', 'rgba(176,150,255,.7)'],    // 하늘 · 라벤더
-                   ['rgba(255,250,222,.95)', 'rgba(113,220,251,.75)']];  // 흰 핵 · 하늘
+const GLOW_EM   = [['rgba(255,245,211,.95)', 'rgba(140,212,250,.6)'],    // 크림 · 하늘
+                   ['rgba(190,247,240,.95)', 'rgba(255,236,172,.55)'],   // 민트 · 크림
+                   ['rgba(183,228,255,.95)', 'rgba(138,255,243,.5)']];   // 하늘 · 민트
 const GLOW_SOFT = GLOW_EM.map(pair => pair.map(c => c.replace(/[\d.]+\)$/, a => (parseFloat(a) * .35).toFixed(2) + ')')));
 // 숫자 : 5x7 도트 (병원 로봇 길안내와 같은 글리프). 칸마다 원을 미리 깔고 켜진 칸만 불을 켠다
 const NS = 'http://www.w3.org/2000/svg';   // 도트 글자·카운터 SVG
